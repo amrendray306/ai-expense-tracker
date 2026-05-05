@@ -25,6 +25,8 @@ const createTransporter = () => {
   });
 };
 
+let testAccount: nodemailer.TestAccount | null = null;
+
 export const sendNotification = async (
   email: string,
   phone: string | null,
@@ -33,7 +35,33 @@ export const sendNotification = async (
 ) => {
   // ── Email ──────────────────────────────────────────────────────────────────
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[Email] SMTP_USER or SMTP_PASS not set — skipping email send.');
+    console.log('[Email] No SMTP credentials found. Using free Ethereal Email for testing...');
+    try {
+      if (!testAccount) {
+        testAccount = await nodemailer.createTestAccount();
+      }
+      const transporter = nodemailer.createTransport({
+        host: 'smtp.ethereal.email',
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      });
+      
+      const info = await transporter.sendMail({
+        from: '"AI Finance Mock" <test@ethereal.email>',
+        to: email,
+        subject: subject,
+        text: message
+      });
+      
+      console.log(`[Email] ✅ Test email "sent" to ${email}`);
+      console.log(`[Email] 🔍 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+    } catch (error) {
+      console.error('[Email] ❌ Failed to send Ethereal test email:', error);
+    }
   } else {
     try {
       const transporter = createTransporter(); // lazy: env vars are loaded by now
