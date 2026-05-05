@@ -106,48 +106,48 @@ export default function NotificationBell() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
             transition={{ duration: 0.15 }}
-            className="absolute right-0 top-12 w-80 md:w-96 glass border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden"
+            className="absolute right-0 top-12 w-80 md:w-96 bg-[#121212] border border-white/20 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-              <h3 className="font-bold text-lg">Notifications</h3>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-white/5">
+              <h3 className="font-bold text-lg text-white">Notifications</h3>
               <div className="flex items-center gap-2">
                 {unreadCount > 0 && (
-                  <button onClick={markAll} className="text-xs text-primary hover:text-primary/80 flex items-center gap-1">
+                  <button onClick={markAll} className="text-xs text-primary hover:text-white flex items-center gap-1 font-semibold">
                     <CheckCheck size={14} /> Mark all read
                   </button>
                 )}
-                <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-white">
+                <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-white">
                   <X size={18} />
                 </button>
               </div>
             </div>
 
             {/* List */}
-            <div className="max-h-96 overflow-y-auto divide-y divide-white/5">
+            <div className="max-h-96 overflow-y-auto divide-y divide-white/10">
               {notifications.length === 0 ? (
                 <div className="py-12 text-center text-gray-500">
-                  <Bell size={32} className="mx-auto mb-3 opacity-30" />
+                  <Bell size={32} className="mx-auto mb-3 opacity-20" />
                   <p>No notifications yet</p>
                 </div>
               ) : (
                 notifications.map(n => (
                   <div
                     key={n.id}
-                    className={`flex items-start gap-3 px-5 py-4 hover:bg-white/5 transition-colors cursor-pointer ${!n.isRead ? 'bg-primary/5' : ''}`}
+                    className={`flex items-start gap-4 px-5 py-4 hover:bg-white/10 transition-colors cursor-pointer ${!n.isRead ? 'bg-primary/20 border-l-4 border-l-primary' : ''}`}
                     onClick={() => !n.isRead && markOne(n.id)}
                   >
                     <span className="text-2xl flex-shrink-0 mt-0.5">{typeIcon[n.type] || '🔔'}</span>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm leading-snug ${!n.isRead ? 'text-white font-medium' : 'text-gray-300'}`}>
+                      <p className={`text-sm leading-snug ${!n.isRead ? 'text-white font-bold' : 'text-gray-300'}`}>
                         {n.message}
                       </p>
-                      <p className="text-[11px] text-gray-500 mt-1">
+                      <p className="text-[11px] text-gray-400 mt-1">
                         {new Date(n.createdAt).toLocaleString()}
                       </p>
                     </div>
                     {!n.isRead && (
-                      <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-1.5" />
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_rgba(59,130,246,0.8)] flex-shrink-0 mt-1.5" />
                     )}
                     {n.isRead && (
                       <Check size={14} className="text-gray-600 flex-shrink-0 mt-1" />
@@ -164,20 +164,20 @@ export default function NotificationBell() {
       <AnimatePresence>
         {toast && (
           <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
-            className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-50 glass-card p-4 border-l-4 border-l-red-500 shadow-2xl flex items-center gap-3 max-w-sm"
+            initial={{ opacity: 0, x: 50, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 50, scale: 0.9 }}
+            className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-[100] bg-[#1a1a1a] p-5 border-l-4 border-l-red-500 shadow-[0_20px_50px_rgba(0,0,0,0.4)] rounded-xl flex items-center gap-4 max-w-sm border border-white/10"
           >
-            <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 flex-shrink-0">
-              <AlertTriangle size={20} />
+            <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center text-white flex-shrink-0 shadow-lg shadow-red-500/20">
+              <AlertTriangle size={24} />
             </div>
-            <div>
-              <p className="text-sm font-bold text-white leading-tight">Budget Alert</p>
-              <p className="text-xs text-gray-300 mt-0.5 line-clamp-2">{toast.message}</p>
+            <div className="flex-1">
+              <p className="text-sm font-black text-white uppercase tracking-tight">Alert Detected</p>
+              <p className="text-xs text-gray-300 mt-1 font-medium leading-relaxed">{toast.message}</p>
             </div>
-            <button onClick={() => setToast(null)} className="ml-auto text-gray-500 hover:text-white">
-              <X size={16} />
+            <button onClick={() => setToast(null)} className="text-gray-500 hover:text-white p-1">
+              <X size={18} />
             </button>
           </motion.div>
         )}
