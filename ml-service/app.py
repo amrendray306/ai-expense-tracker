@@ -56,15 +56,12 @@ def analyze():
     anomaly_df = df[features]
 
     # ── Refined Sensitivity Scaling ──
-    # User requested 'average count' (not too many) and '10-60% sensitivity range'.
-    # We keep the 0.10 to 0.60 'sensitivity' value but use it to scale THRESHOLDS, 
-    # while keeping the raw IsolationForest contamination low (max 15%).
+    # User requested exactly 3-4 anomalies for datasets with ~20 items.
     n_expenses = len(df)
     log_scale = np.log(max(n_expenses, 1)) / np.log(200)
-    sensitivity = max(0.10, min(0.60, 0.10 + 0.50 * log_scale))
     
-    # IsolationForest: use a standard 5-15% contamination range
-    iforest_contamination = max(0.05, min(0.15, 0.05 + 0.10 * log_scale))
+    # IsolationForest: Use a floor of 7% to ensure we catch enough items
+    iforest_contamination = max(0.07, min(0.18, 0.07 + 0.11 * log_scale))
     
     iso_forest = IsolationForest(contamination=iforest_contamination, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
@@ -72,10 +69,9 @@ def analyze():
     # ── Hybrid Logic: Budget & Stats ────────
     monthly_budget = request.json.get('monthlyBudget', 0)
     
-    # 1. Dynamic Z-Score Threshold (Scales with sensitivity)
-    # High sensitivity (0.6) -> Lower threshold (catch more)
-    # Low sensitivity (0.1) -> Higher threshold (catch only extremes)
-    z_threshold = 4.5 - (3.0 * log_scale) 
+    # 1. Dynamic Z-Score Threshold (Tuned for 3-4 anomalies at n=20)
+    # Scales from 3.5 (strict) down to 1.8 (sensitive)
+    z_threshold = max(1.8, 3.5 - (2.2 * log_scale)) 
     df.loc[df['z_score'] > z_threshold, 'anomaly'] = -1
     
     # 2. Hard limit: 5x category average
