@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, UserPlus, Receipt, CheckCircle, X, Search, BarChart3, Users, DollarSign, Wallet, Plus } from 'lucide-react';
+import { ArrowLeft, UserPlus, Receipt, CheckCircle, X, Search, BarChart3, Users, DollarSign, Wallet, Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api';
 
@@ -119,6 +119,19 @@ export default function GroupDetails() {
       fetchAnalytics();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+    try {
+      await api.delete(`/shared-expenses/${expenseId}`);
+      fetchGroupData();
+      fetchBalances();
+      fetchAnalytics();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete expense.');
     }
   };
 
@@ -249,6 +262,18 @@ export default function GroupDetails() {
                         <p className={`font-bold ${item.type === 'settlement' ? 'text-green-400' : ''}`}>₹{item.amount.toFixed(0)}</p>
                         <p className="text-[10px] text-gray-500">{new Date(item.date).toLocaleDateString()}</p>
                       </div>
+                      {item.type === 'expense' && (item.paidBy.id === user?.id || group.creatorId === user?.id) && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteExpense(item.id);
+                          }}
+                          className="ml-4 p-2 text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                          title="Delete Expense"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

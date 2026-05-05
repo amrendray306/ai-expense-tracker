@@ -15,50 +15,81 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendNotification = void 0;
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const twilio_1 = __importDefault(require("twilio"));
-// Initialize email transporter using env vars or ethereal fallback for local dev
-const transporter = nodemailer_1.default.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.ethereal.email',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    auth: {
-        user: process.env.SMTP_USER || 'ethereal_user',
-        pass: process.env.SMTP_PASS || 'ethereal_pass'
-    }
-});
-// Initialize Twilio client
-const twilioClient = process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN
-    ? (0, twilio_1.default)(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-    : null;
+const mail_1 = __importDefault(require("@sendgrid/mail"));
+const emailTemplates_1 = require("../templates/emailTemplates");
+/**
+ * PRODUCTION-READY EMAIL SERVICE
+ * Priority: 1. SendGrid API (Preferred) -> 2. SMTP (Fallback)
+ */
+const createTransporter = () => {
+    return nodemailer_1.default.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: parseInt(process.env.SMTP_PORT || '587'),
+        secure: false,
+        auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS
+        },
+        tls: {
+            rejectUnauthorized: false
+        }
+    });
+};
 const sendNotification = (email, phone, subject, message) => __awaiter(void 0, void 0, void 0, function* () {
-    // Send Email
-    try {
-        yield transporter.sendMail({
-            from: process.env.SMTP_FROM || '"FinAdvisor AI" <alerts@finadvisor.com>',
-            to: email,
-            subject: subject,
-            text: message
-        });
-        console.log(`[Email] Sent to ${email}: ${subject}`);
-    }
-    catch (error) {
-        // Silently skip email if SMTP is not configured — app still works
-        console.warn(`[Email] Could not send to ${email} — check SMTP credentials in .env`);
-    }
-    // Send SMS
-    if (phone && twilioClient && process.env.TWILIO_PHONE_NUMBER) {
+    const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@aifinance.com';
+    const recipient = process.env.EMAIL_OVERRIDE || email;
+    const htmlContent = (0, emailTemplates_1.getEmailHtml)(subject, message);
+    // ── 1. SENDGRID API (Production Preferred) ──────────────────────────────────
+    if (process.env.SENDGRID_API_KEY) {
         try {
+            mail_1.default.setApiKey(process.env.SENDGRID_API_KEY);
+            yield mail_1.default.send({
+                to: recipient,
+                from: fromEmail,
+                subject: subject,
+                text: message,
+                html: htmlContent
+            });
+            console.log(`[Email] ✅ Sent via SendGrid to ${email}`);
+        }
+        catch (error) {
+            console.error(`[Email] ❌ SendGrid failed for ${email}:`, error.message);
+        }
+    }
+    // ── 2. NODEMAILER SMTP (Development Fallback) ────────────────────────────────
+    else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+        try {
+            const transporter = createTransporter();
+            yield transporter.sendMail({
+                from: fromEmail,
+                to: recipient,
+                subject: subject,
+                text: message,
+                html: htmlContent
+            });
+            console.log(`[Email] ✅ Sent via SMTP to ${email}`);
+        }
+        catch (error) {
+            console.error(`[Email] ❌ SMTP failed for ${email}:`, error.message);
+        }
+    }
+    else {
+        console.warn('[Email] ⚠️ No email service configured (SendGrid/SMTP missing).');
+    }
+    // ── SMS (Twilio) ───────────────────────────────────────────────────────────
+    if (phone && process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER) {
+        try {
+            const twilioClient = (0, twilio_1.default)(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
             yield twilioClient.messages.create({
                 body: message,
                 from: process.env.TWILIO_PHONE_NUMBER,
                 to: phone
             });
-            console.log(`[Notification Service] SMS sent to ${phone}`);
+            console.log(`[SMS] ✅ Sent to ${phone}`);
         }
         catch (error) {
-            console.error(`[Notification Service] Failed to send SMS to ${phone}:`, error);
+            console.error(`[SMS] ❌ Failed to send to ${phone}:`, error);
         }
-    }
-    else if (phone) {
-        console.log(`[Notification Service] Mock SMS to ${phone}: ${message}`);
     }
 });
 exports.sendNotification = sendNotification;

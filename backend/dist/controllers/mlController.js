@@ -39,8 +39,11 @@ const getInsights = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
                 prediction: null
             });
         }
+        // Fetch user for budget context
+        const user = yield db_1.prisma.user.findUnique({ where: { id: userId }, select: { monthlyBudget: true } });
         // Call Python ML service
         const mlResponse = yield axios_1.default.post(`${ML_URL}/api/ml/analyze`, {
+            monthlyBudget: (user === null || user === void 0 ? void 0 : user.monthlyBudget) || 0,
             expenses: expenses.map(e => {
                 var _a;
                 return (Object.assign(Object.assign({}, e), { amount: Number(e.amount), date: e.date.toISOString().split('T')[0], category: ((_a = e.category) === null || _a === void 0 ? void 0 : _a.name) || 'Uncategorized' }));

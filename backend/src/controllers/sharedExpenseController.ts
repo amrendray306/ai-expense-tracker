@@ -81,3 +81,31 @@ export const settleUp = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Server error' });
   }
 };
+
+export const deleteSharedExpense = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.id;
+
+    const expense = await prisma.sharedExpense.findUnique({
+      where: { id },
+      include: { group: true }
+    });
+
+    if (!expense) return res.status(404).json({ error: 'Expense not found' });
+
+    // Authorization: Only payer or group creator can delete
+    if (expense.paidById !== userId && expense.group.creatorId !== userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this expense' });
+    }
+
+    await prisma.sharedExpense.delete({
+      where: { id }
+    });
+
+    res.json({ message: 'Expense deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting shared expense:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+};

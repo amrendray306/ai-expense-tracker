@@ -4,9 +4,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.app = exports.io = void 0;
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config(); // ← MUST be first: loads .env before any service reads process.env
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
-const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 const http_1 = __importDefault(require("http"));
 const socket_io_1 = require("socket.io");
@@ -23,7 +24,6 @@ const notificationRoutes_1 = __importDefault(require("./routes/notificationRoute
 const goalRoutes_1 = __importDefault(require("./routes/goalRoutes"));
 const notificationDbService_1 = require("./services/notificationDbService");
 const cron_1 = require("./cron");
-dotenv_1.default.config();
 const app = (0, express_1.default)();
 exports.app = app;
 const server = http_1.default.createServer(app);
@@ -50,6 +50,9 @@ app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 app.use('/uploads', express_1.default.static(path_1.default.join(__dirname, '../uploads')));
+app.get('/', (req, res) => {
+    res.send('AI Expense Tracker Backend is running!');
+});
 app.use('/api/auth', authRoutes_1.default);
 app.use('/api/categories', categoryRoutes_1.default);
 app.use('/api/expenses', expenseRoutes_1.default);
