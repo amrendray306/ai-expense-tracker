@@ -47,8 +47,13 @@ def analyze():
     else:
         anomaly_df = df[['amount']]
 
-    # Increased contamination to 0.3 (detects 30% anomalies)
-    iso_forest = IsolationForest(contamination=0.3, random_state=42)
+    # ── Dynamic Anomaly Sensitivity ───────────
+    # Sensitivity varies between 0.1 and 0.35 based on the user's data volume.
+    # For fewer expenses, we increase sensitivity to ensure insights are shown.
+    n_expenses = len(df)
+    dynamic_contamination = max(0.1, min(0.35, 2.0 / n_expenses if n_expenses > 0 else 0.2))
+    
+    iso_forest = IsolationForest(contamination=dynamic_contamination, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
 
     # ── Rule-Based Anomaly Detection ──────────
