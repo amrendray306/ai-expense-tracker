@@ -30,4 +30,3 @@ export const getEmailHtml = (subject: string, message: string) => `
 </body>
 </html>
 `;
-`,Description:
