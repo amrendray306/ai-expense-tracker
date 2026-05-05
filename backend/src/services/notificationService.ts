@@ -43,30 +43,10 @@ export const sendNotification = async (
         console.log(`[Email] Override active → redirecting from ${email} to ${recipient}`);
       }
       await transporter.sendMail({
-        from: process.env.SMTP_FROM || `"AIFinance Advisor" <${process.env.SMTP_USER}>`,
+        from: process.env.SMTP_USER,
         to: recipient,
         subject: subject,
-        text: message,
-        html: `
-          <div style="font-family:Inter,sans-serif;max-width:480px;margin:auto;
-                      background:#f4f4f8;border-radius:12px;overflow:hidden;">
-            <div style="background:linear-gradient(135deg,#4f46e5,#7c3aed);
-                        padding:28px 32px;">
-              <h1 style="margin:0;color:#fff;font-size:22px;letter-spacing:-0.5px;">
-                💰 AIFinance Advisor
-              </h1>
-            </div>
-            <div style="padding:32px;">
-              <p style="margin:0 0 16px;color:#333;font-size:15px;line-height:1.6;">
-                ${message}
-              </p>
-              <hr style="border:none;border-top:1px solid #e0e0e0;margin:24px 0;">
-              <small style="color:#999;font-size:12px;">
-                This is an automated message from AIFinance Advisor. Do not reply.
-              </small>
-            </div>
-          </div>
-        `
+        text: message
       });
       console.log(`[Email] ✅ Sent to ${email}: "${subject}"`);
     } catch (error: any) {
