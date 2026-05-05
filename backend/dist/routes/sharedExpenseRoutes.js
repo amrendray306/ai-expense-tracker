@@ -9,4 +9,5 @@ const authMiddleware_1 = require("../middlewares/authMiddleware");
 const router = express_1.default.Router();
 router.post('/', authMiddleware_1.protect, sharedExpenseController_1.addSharedExpense);
 router.post('/settle', authMiddleware_1.protect, sharedExpenseController_1.settleUp);
+router.delete('/:id', authMiddleware_1.protect, sharedExpenseController_1.deleteSharedExpense);
 exports.default = router;

@@ -85,9 +85,10 @@ export const settleUp = async (req: Request, res: Response) => {
 export const deleteSharedExpense = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    if (!id || typeof id !== 'string') return res.status(400).json({ error: 'Invalid ID' });
     const userId = (req as any).user.id;
 
-    const expense = await prisma.sharedExpense.findUnique({
+    const expense: any = await prisma.sharedExpense.findUnique({
       where: { id },
       include: { group: true }
     });

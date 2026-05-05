@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.settleUp = exports.addSharedExpense = void 0;
+exports.deleteSharedExpense = exports.settleUp = exports.addSharedExpense = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const addSharedExpense = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -85,3 +85,30 @@ const settleUp = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.settleUp = settleUp;
+const deleteSharedExpense = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        if (!id || typeof id !== 'string')
+            return res.status(400).json({ error: 'Invalid ID' });
+        const userId = req.user.id;
+        const expense = yield prisma.sharedExpense.findUnique({
+            where: { id },
+            include: { group: true }
+        });
+        if (!expense)
+            return res.status(404).json({ error: 'Expense not found' });
+        // Authorization: Only payer or group creator can delete
+        if (expense.paidById !== userId && expense.group.creatorId !== userId) {
+            return res.status(403).json({ error: 'Not authorized to delete this expense' });
+        }
+        yield prisma.sharedExpense.delete({
+            where: { id }
+        });
+        res.json({ message: 'Expense deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting shared expense:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+exports.deleteSharedExpense = deleteSharedExpense;
