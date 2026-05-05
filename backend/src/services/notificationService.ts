@@ -1,26 +1,24 @@
 import nodemailer from 'nodemailer';
 import twilio from 'twilio';
+import sgMail from '@sendgrid/mail';
+import { getEmailHtml } from '../templates/emailTemplates';
 
 /**
- * Creates a fresh nodemailer transporter using the current process.env values.
- * 
- * IMPORTANT: The transporter MUST be created lazily (inside the function, not at
- * module load time). TypeScript compiles `import` statements to `require()` calls
- * which are ALL hoisted to the top of the compiled JS file — this means any
- * `process.env.*` reads at module scope execute BEFORE dotenv.config() runs,
- * resulting in `undefined` values and the fallback ethereal (fake) SMTP being used.
+ * PRODUCTION-READY EMAIL SERVICE
+ * Priority: 1. SendGrid API (Preferred) -> 2. SMTP (Fallback)
  */
+
 const createTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: false,              // STARTTLS — required for Gmail on port 587
+    secure: false,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS
     },
     tls: {
-      rejectUnauthorized: false // allow self-signed certs in dev/staging
+      rejectUnauthorized: false
     }
   });
 };
@@ -31,27 +29,43 @@ export const sendNotification = async (
   subject: string,
   message: string
 ) => {
-  // ── Email ──────────────────────────────────────────────────────────────────
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn('[Email] SMTP_USER or SMTP_PASS not set — skipping email send.');
-  } else {
+  const fromEmail = process.env.EMAIL_FROM || process.env.SMTP_USER || 'no-reply@aifinance.com';
+  const recipient = process.env.EMAIL_OVERRIDE || email;
+  const htmlContent = getEmailHtml(subject, message);
+
+  // ── 1. SENDGRID API (Production Preferred) ──────────────────────────────────
+  if (process.env.SENDGRID_API_KEY) {
     try {
-      const transporter = createTransporter(); // lazy: env vars are loaded by now
-      // EMAIL_OVERRIDE: redirect all emails to a fixed address (useful for dev/testing)
-      const recipient = process.env.EMAIL_OVERRIDE || email;
-      if (process.env.EMAIL_OVERRIDE) {
-        console.log(`[Email] Override active → redirecting from ${email} to ${recipient}`);
-      }
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      await sgMail.send({
+        to: recipient,
+        from: fromEmail,
+        subject: subject,
+        text: message,
+        html: htmlContent
+      });
+      console.log(`[Email] ✅ Sent via SendGrid to ${email}`);
+    } catch (error: any) {
+      console.error(`[Email] ❌ SendGrid failed for ${email}:`, error.message);
+    }
+  } 
+  // ── 2. NODEMAILER SMTP (Development Fallback) ────────────────────────────────
+  else if (process.env.SMTP_USER && process.env.SMTP_PASS) {
+    try {
+      const transporter = createTransporter();
       await transporter.sendMail({
-        from: process.env.SMTP_USER,
+        from: fromEmail,
         to: recipient,
         subject: subject,
-        text: message
+        text: message,
+        html: htmlContent
       });
-      console.log(`[Email] ✅ Sent to ${email}: "${subject}"`);
+      console.log(`[Email] ✅ Sent via SMTP to ${email}`);
     } catch (error: any) {
-      console.error(`[Email] ❌ Failed to send to ${email}:`, error.message);
+      console.error(`[Email] ❌ SMTP failed for ${email}:`, error.message);
     }
+  } else {
+    console.warn('[Email] ⚠️ No email service configured (SendGrid/SMTP missing).');
   }
 
   // ── SMS (Twilio) ───────────────────────────────────────────────────────────
@@ -67,7 +81,5 @@ export const sendNotification = async (
     } catch (error) {
       console.error(`[SMS] ❌ Failed to send to ${phone}:`, error);
     }
-  } else if (phone) {
-    console.log(`[SMS] Mock (Twilio not configured) → ${phone}: ${message}`);
   }
 };
