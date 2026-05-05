@@ -89,13 +89,25 @@ def analyze():
         # Force small expenses back to normal if they aren't extreme outliers
         df.loc[(df['amount'] < small_expense_limit) & (df['z_score'] < 3.0), 'anomaly'] = 1
 
+    # 4. DUPLICATE DETECTION (New)
+    # Flag if the same amount is spent in the same category multiple times on the same day.
+    # We only flag if the amount is > 100 to avoid flagging small routine items (like bus tickets).
+    df['is_dup'] = df.duplicated(subset=['date', 'amount', 'category'], keep=False)
+    df.loc[(df['is_dup']) & (df['amount'] > 100), 'anomaly'] = -1
+
+    # 5. VELOCITY SPIKE (New)
+    # Flag if total daily spending exceeds 30% of the entire monthly budget in one day.
+    if monthly_budget > 0:
+        daily_total = df.groupby('date')['amount'].transform('sum')
+        df.loc[daily_total > (monthly_budget * 0.3), 'anomaly'] = -1
+
     # Prepare output
     df['date_str'] = df['date'].dt.strftime('%Y-%m-%d')
     anomalies_df = df[df['anomaly'] == -1].copy()
     anomalies_df['date'] = anomalies_df['date_str']
     
     # Clean up internal columns before returning
-    cols_to_drop = ['date_str', 'cat_mean', 'cat_std', 'z_score', 'cat_code', 'anomaly']
+    cols_to_drop = ['date_str', 'cat_mean', 'cat_std', 'z_score', 'cat_code', 'anomaly', 'is_dup']
     anomalies = anomalies_df.drop(columns=[c for c in cols_to_drop if c in anomalies_df.columns]).to_dict(orient='records')
 
     # ── STABILIZED PREDICTION LOGIC ──
