@@ -50,6 +50,7 @@ export const getMonthlyReport = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    console.log(`[Report] Generating PDF for user ${userId}...`);
     const pdfPath = await generateMonthlyReportPdf(
       userId,
       user.name,
@@ -58,22 +59,35 @@ export const getMonthlyReport = async (req: AuthRequest, res: Response) => {
       insights
     );
 
-    // Stream the file directly for download
     const absolutePath = path.join(__dirname, '../../', pdfPath);
+    console.log(`[Report] Streaming file: ${absolutePath}`);
+
+    if (!fs.existsSync(absolutePath)) {
+      console.error(`[Report] Error: File not found at ${absolutePath}`);
+      return res.status(500).json({ error: 'Generated report file not found' });
+    }
+
     res.download(absolutePath, `Financial_Report_${monthName.replace(' ', '_')}.pdf`, (err) => {
       if (err) {
-        console.error('Download error:', err);
+        console.error('[Report] Download error:', err);
         if (!res.headersSent) {
           res.status(500).json({ error: 'Failed to download report' });
         }
+      } else {
+        console.log('[Report] ✅ Successfully sent to client');
       }
-      // Delete the temp file after sending to keep storage clean
+
+      // Delete the temp file after sending
       fs.unlink(absolutePath, (unlinkErr) => {
-        if (unlinkErr) console.error('Failed to delete temp report:', unlinkErr);
+        if (unlinkErr) {
+          console.error('[Report] Failed to delete temp report:', unlinkErr);
+        } else {
+          console.log('[Report] Temp file deleted');
+        }
       });
     });
   } catch (error) {
-    console.error('Report Error:', error);
+    console.error('[Report] Critical Error:', error);
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to generate report' });
     }

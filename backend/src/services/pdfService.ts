@@ -81,7 +81,7 @@ export const generateMonthlyReportPdf = async (
       doc.end();
 
       writeStream.on('finish', () => {
-        resolve(`/uploads/reports/${fileName}`);
+        resolve(`uploads/reports/${fileName}`);
       });
       writeStream.on('error', (err) => {
         reject(err);
