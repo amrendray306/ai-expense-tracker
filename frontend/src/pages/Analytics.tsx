@@ -86,13 +86,21 @@ export default function Analytics() {
   const handleDownloadReport = async () => {
     try {
       setDownloadingPdf(true);
-      const res = await api.get('/reports/monthly');
-      const { pdfUrl } = res.data;
-      if (pdfUrl) {
-        // Build the full URL, default to port 5500 if not specified
-        const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'http://localhost:5500';
-        window.open(`${baseUrl}${pdfUrl}`, '_blank');
-      }
+      const res = await api.get('/reports/monthly', {
+        responseType: 'blob' // Important for binary data
+      });
+      
+      // Create a link to download the blob
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Financial_Report_${new Date().getMonth() + 1}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Failed to download report', err);
       alert('Failed to generate report. Please try again.');

@@ -4,6 +4,7 @@ import { AuthRequest } from '../middlewares/authMiddleware';
 import { generateMonthlyReportPdf } from '../services/pdfService';
 import axios from 'axios';
 import fs from 'fs';
+import path from 'path';
 
 const ML_URL = process.env.ML_SERVICE_URL || 'http://localhost:5002';
 
@@ -57,11 +58,24 @@ export const getMonthlyReport = async (req: AuthRequest, res: Response) => {
       insights
     );
 
-    // Return the URL or download the file directly
-    const backendUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
-    res.json({ pdfUrl: `${backendUrl}${pdfPath}` });
+    // Stream the file directly for download
+    const absolutePath = path.join(__dirname, '../../', pdfPath);
+    res.download(absolutePath, `Financial_Report_${monthName.replace(' ', '_')}.pdf`, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to download report' });
+        }
+      }
+      // Delete the temp file after sending to keep storage clean
+      fs.unlink(absolutePath, (unlinkErr) => {
+        if (unlinkErr) console.error('Failed to delete temp report:', unlinkErr);
+      });
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to generate report' });
+    console.error('Report Error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to generate report' });
+    }
   }
 };
