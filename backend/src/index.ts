@@ -1,6 +1,8 @@
+import dotenv from 'dotenv';
+dotenv.config(); // ← MUST be first: loads .env before any service reads process.env
+
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import path from 'path';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
@@ -18,8 +20,6 @@ import notificationRoutes from './routes/notificationRoutes';
 import goalRoutes from './routes/goalRoutes';
 import { setIo } from './services/notificationDbService';
 import { initCronJobs } from './cron';
-
-dotenv.config();
 
 const app = express();
 const server = http.createServer(app);

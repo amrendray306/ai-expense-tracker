@@ -58,7 +58,8 @@ export const getMonthlyReport = async (req: AuthRequest, res: Response) => {
     );
 
     // Return the URL or download the file directly
-    res.json({ pdfUrl: pdfPath });
+    const backendUrl = process.env.BACKEND_URL || `${req.protocol}://${req.get('host')}`;
+    res.json({ pdfUrl: `${backendUrl}${pdfPath}` });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to generate report' });
