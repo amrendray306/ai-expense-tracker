@@ -39,37 +39,45 @@ def analyze():
     df['amount'] = df['amount'].astype(float)
     df = df.sort_values('date')
 
-    # ── Anomaly Detection (ML Based) ──────────
-    if 'category' in df.columns:
-        df_encoded = pd.get_dummies(df, columns=['category'])
-        features = ['amount'] + [col for col in df_encoded.columns if col.startswith('category_')]
-        anomaly_df = df_encoded[features]
-    else:
-        anomaly_df = df[['amount']]
+    # ── ADVANCED ANOMALY DETECTION (Category-Aware) ──
+    # Calculate statistics relative to each category
+    df['cat_mean'] = df.groupby('category')['amount'].transform('mean')
+    df['cat_std'] = df.groupby('category')['amount'].transform('std').fillna(0)
+    
+    # Z-Score: How many standard deviations is this from the category's average?
+    # This catches a ₹500 tea if usual tea is ₹50, but ignores ₹20,000 Rent if usual is ₹20,000.
+    df['z_score'] = (df['amount'] - df['cat_mean']) / df['cat_std']
+    df['z_score'] = df['z_score'].fillna(0).replace([np.inf, -np.inf], 0)
+
+    # Prepare features for ML Model
+    # We use amount, z_score, and a numeric category code
+    df['cat_code'] = df['category'].astype('category').cat.codes
+    features = ['amount', 'z_score', 'cat_code']
+    anomaly_df = df[features]
 
     # ── Dynamic Anomaly Sensitivity ───────────
-    # Sensitivity INCREASES with more expenses (more data = better context for anomaly detection):
-    #   - Few expenses  (5):    ~10% contamination (low sensitivity — not enough data)
-    #   - Medium       (20):    ~38% contamination (balanced)
-    #   - Large        (50):    ~47% contamination (more confident detection)
-    #   - Very large  (200+):   60% contamination (maximum — catches subtle patterns)
-    # Uses logarithmic growth for a smooth curve.
     n_expenses = len(df)
-    log_scale = np.log(max(n_expenses, 1)) / np.log(200)  # normalize to 0→1 over 1→200 expenses
+    log_scale = np.log(max(n_expenses, 1)) / np.log(200)
     dynamic_contamination = round(max(0.10, min(0.60, 0.10 + 0.50 * log_scale)), 4)
     
     iso_forest = IsolationForest(contamination=dynamic_contamination, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
 
-    # ── Rule-Based Anomaly Detection ──────────
-    # Flag anything that is 3x the average transaction amount
-    avg_amount = df['amount'].mean()
-    df.loc[df['amount'] > (avg_amount * 3), 'anomaly'] = -1
+    # ── Hybrid Logic: Refine with Rules ───────
+    # 1. High Z-Score (> 2.5 standard deviations) is definitely an anomaly
+    df.loc[df['z_score'] > 2.5, 'anomaly'] = -1
+    
+    # 2. Hard limit: 4x category average is definitely suspicious
+    df.loc[df['amount'] > (df['cat_mean'] * 4), 'anomaly'] = -1
 
+    # Prepare output
     df['date_str'] = df['date'].dt.strftime('%Y-%m-%d')
     anomalies_df = df[df['anomaly'] == -1].copy()
     anomalies_df['date'] = anomalies_df['date_str']
-    anomalies = anomalies_df.drop(columns=['date_str']).to_dict(orient='records')
+    
+    # Clean up internal columns before returning
+    cols_to_drop = ['date_str', 'cat_mean', 'cat_std', 'z_score', 'cat_code', 'anomaly']
+    anomalies = anomalies_df.drop(columns=[c for c in cols_to_drop if c in anomalies_df.columns]).to_dict(orient='records')
 
     # ── Regression for next 60-day prediction ──
     df['days_since_start'] = (df['date'] - df['date'].min()).dt.days
