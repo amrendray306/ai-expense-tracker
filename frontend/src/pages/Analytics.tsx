@@ -91,7 +91,8 @@ export default function Analytics() {
       });
       
       // Create a link to download the blob
-      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Financial_Report_${new Date().getMonth() + 1}.pdf`);
