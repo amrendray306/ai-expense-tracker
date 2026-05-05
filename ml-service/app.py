@@ -39,7 +39,7 @@ def analyze():
     df['amount'] = df['amount'].astype(float)
     df = df.sort_values('date')
 
-    # ── Anomaly Detection ──────────────────────
+    # ── Anomaly Detection (ML Based) ──────────
     if 'category' in df.columns:
         df_encoded = pd.get_dummies(df, columns=['category'])
         features = ['amount'] + [col for col in df_encoded.columns if col.startswith('category_')]
@@ -47,8 +47,14 @@ def analyze():
     else:
         anomaly_df = df[['amount']]
 
-    iso_forest = IsolationForest(contamination=0.1, random_state=42)
+    # Increased contamination to 0.2 (detects more anomalies)
+    iso_forest = IsolationForest(contamination=0.2, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
+
+    # ── Rule-Based Anomaly Detection ──────────
+    # Flag anything that is 3x the average transaction amount
+    avg_amount = df['amount'].mean()
+    df.loc[df['amount'] > (avg_amount * 3), 'anomaly'] = -1
 
     df['date_str'] = df['date'].dt.strftime('%Y-%m-%d')
     anomalies_df = df[df['anomaly'] == -1].copy()
