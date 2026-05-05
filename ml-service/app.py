@@ -10,6 +10,10 @@ import re
 app = Flask(__name__)
 CORS(app)
 
+@app.route('/')
+def home():
+    return "AI Expense Tracker ML Service is running!"
+
 # ────────────────────────────────────────────────
 # Helper: normalize expense title for grouping
 # ────────────────────────────────────────────────
