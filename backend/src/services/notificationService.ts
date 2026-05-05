@@ -25,7 +25,7 @@ export const sendNotification = async (
   // Send Email
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"FinAdvisor AI" <alerts@finadvisor.com>',
+      from: process.env.SMTP_FROM || process.env.SMTP_USER || '"FinAdvisor AI" <alerts@finadvisor.com>',
       to: email,
       subject: subject,
       text: message
