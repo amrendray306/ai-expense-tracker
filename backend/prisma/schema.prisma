@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// FRIEND SYSTEM + NOTIFICATIONS
+// ==========================================
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model FriendRequest {
+  id         String              @id @default(uuid())
+  senderId   String
+  sender     User                @relation("FriendRequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User                @relation("FriendRequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  status     FriendRequestStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([senderId, receiverId])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  userId1   String
+  user1     User     @relation("FriendshipUser1", fields: [userId1], references: [id], onDelete: Cascade)
+  userId2   String
+  user2     User     @relation("FriendshipUser2", fields: [userId2], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId1, userId2])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  meta      Json?
+  createdAt DateTime @default(now())
+}
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String?
+  name      String
+  phone        String?
+  isVerified   Boolean    @default(false)
+  otpCode      String?
+  otpExpiresAt DateTime?
+  googleId     String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  monthlyBudget Float? @default(0)
+  expenses  Expense[]
+  categories Category[]
+
+  // Group Features
+  createdGroups      Group[]         @relation("GroupCreator")
+  groupMemberships   GroupMember[]
+  paidSharedExpenses SharedExpense[] @relation("SharedExpensePayer")
+  expenseSplits      ExpenseSplit[]
+  settlementsPaid    Settlement[]    @relation("SettlementPaidBy")
+  settlementsReceived Settlement[]   @relation("SettlementPaidTo")
+
+  // Friend & Notification Features
+  sentRequests      FriendRequest[]  @relation("FriendRequestSender")
+  receivedRequests  FriendRequest[]  @relation("FriendRequestReceiver")
+  friendships1      Friendship[]     @relation("FriendshipUser1")
+  friendships2      Friendship[]     @relation("FriendshipUser2")
+  notifications     Notification[]
+  savingsGoals      SavingsGoal[]
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expenses  Expense[]
+  budget    Float?    @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([name, userId])
+}
+
+model Expense {
+  id         String   @id @default(uuid())
+  title      String   @default("Untitled Expense")
+  amount     Float
+  date       DateTime
+  receiptUrl String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ==========================================
+// SHARED GROUP EXPENSES (SPLITWISE FEATURES)
+// ==========================================
+
+model Group {
+  id             String          @id @default(uuid())
+  name           String
+  creatorId      String
+  creator        User            @relation("GroupCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  members        GroupMember[]
+  sharedExpenses SharedExpense[]
+  settlements    Settlement[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model GroupMember {
+  id        String   @id @default(uuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt  DateTime @default(now())
+
+  @@unique([groupId, userId])
+}
+
+model SharedExpense {
+  id          String         @id @default(uuid())
+  title       String
+  amount      Float
+  paidById    String
+  paidBy      User           @relation("SharedExpensePayer", fields: [paidById], references: [id], onDelete: Cascade)
+  groupId     String
+  group       Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  date        DateTime       @default(now())
+  splits      ExpenseSplit[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model ExpenseSplit {
+  id              String        @id @default(uuid())
+  sharedExpenseId String
+  sharedExpense   SharedExpense @relation(fields: [sharedExpenseId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amountOwed      Float         // Exact amount this user owes for this expense
+}
+
+model Settlement {
+  id         String   @id @default(uuid())
+  groupId    String
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  paidById   String
+  paidBy     User     @relation("SettlementPaidBy", fields: [paidById], references: [id], onDelete: Cascade)
+  paidToId   String
+  paidTo     User     @relation("SettlementPaidTo", fields: [paidToId], references: [id], onDelete: Cascade)
+  amount     Float
+  date       DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+// ==========================================
+// SAVINGS GOALS
+// ==========================================
+
+model SavingsGoal {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  targetAmount  Float
+  savedAmount   Float    @default(0)
+  deadline      DateTime?
+  emoji         String?  @default("🎯")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
