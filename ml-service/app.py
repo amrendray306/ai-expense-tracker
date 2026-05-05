@@ -48,13 +48,15 @@ def analyze():
         anomaly_df = df[['amount']]
 
     # ── Dynamic Anomaly Sensitivity ───────────
-    # Sensitivity scales inversely with transaction volume:
-    #   - Few expenses (5-10):   up to 60% contamination (highly sensitive)
-    #   - Medium (10-50):        scales down from 60% → ~20%
-    #   - Large (100+):          settles near 10% (precise, fewer false positives)
-    # Formula: contamination = clamp(6.0 / n_expenses, 0.10, 0.60)
+    # Sensitivity INCREASES with more expenses (more data = better context for anomaly detection):
+    #   - Few expenses  (5):    ~10% contamination (low sensitivity — not enough data)
+    #   - Medium       (20):    ~38% contamination (balanced)
+    #   - Large        (50):    ~47% contamination (more confident detection)
+    #   - Very large  (200+):   60% contamination (maximum — catches subtle patterns)
+    # Uses logarithmic growth for a smooth curve.
     n_expenses = len(df)
-    dynamic_contamination = max(0.10, min(0.60, 6.0 / n_expenses if n_expenses > 0 else 0.30))
+    log_scale = np.log(max(n_expenses, 1)) / np.log(200)  # normalize to 0→1 over 1→200 expenses
+    dynamic_contamination = round(max(0.10, min(0.60, 0.10 + 0.50 * log_scale)), 4)
     
     iso_forest = IsolationForest(contamination=dynamic_contamination, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
