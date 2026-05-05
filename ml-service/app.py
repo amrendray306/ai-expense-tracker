@@ -44,9 +44,8 @@ def analyze():
     df['cat_mean'] = df.groupby('category')['amount'].transform('mean')
     df['cat_std'] = df.groupby('category')['amount'].transform('std').fillna(0)
     
-    # Z-Score: How many standard deviations is this from the category's average?
-    # This catches a ₹500 tea if usual tea is ₹50, but ignores ₹20,000 Rent if usual is ₹20,000.
-    df['z_score'] = (df['amount'] - df['cat_mean']) / df['cat_std']
+    # Z-Score calculation with safety for zero standard deviation
+    df['z_score'] = np.where(df['cat_std'] > 0, (df['amount'] - df['cat_mean']) / df['cat_std'], 0)
     df['z_score'] = df['z_score'].fillna(0).replace([np.inf, -np.inf], 0)
 
     # Prepare features for ML Model
@@ -85,16 +84,15 @@ def analyze():
         # Force small expenses back to normal if they aren't extreme outliers
         df.loc[(df['amount'] < small_expense_limit) & (df['z_score'] < 3.0), 'anomaly'] = 1
 
-    # 4. DUPLICATE DETECTION (New)
-    # Flag if the same amount is spent in the same category multiple times on the same day.
-    # We only flag if the amount is > 100 to avoid flagging small routine items (like bus tickets).
-    df['is_dup'] = df.duplicated(subset=['date', 'amount', 'category'], keep=False)
+    # 4. DUPLICATE DETECTION (Improved: Same-day check)
+    # We use date-only to catch items bought at different times on the same day
+    df['date_only'] = df['date'].dt.date
+    df['is_dup'] = df.duplicated(subset=['date_only', 'amount', 'category'], keep=False)
     df.loc[(df['is_dup']) & (df['amount'] > 100), 'anomaly'] = -1
 
-    # 5. VELOCITY SPIKE (New)
-    # Flag if total daily spending exceeds 30% of the entire monthly budget in one day.
+    # 5. VELOCITY SPIKE (Improved: uses date_only)
     if monthly_budget > 0:
-        daily_total = df.groupby('date')['amount'].transform('sum')
+        daily_total = df.groupby('date_only')['amount'].transform('sum')
         df.loc[daily_total > (monthly_budget * 0.3), 'anomaly'] = -1
 
     # Prepare output
@@ -103,7 +101,7 @@ def analyze():
     anomalies_df['date'] = anomalies_df['date_str']
     
     # Clean up internal columns before returning
-    cols_to_drop = ['date_str', 'cat_mean', 'cat_std', 'z_score', 'cat_code', 'anomaly', 'is_dup']
+    cols_to_drop = ['date_str', 'date_only', 'cat_mean', 'cat_std', 'z_score', 'cat_code', 'anomaly', 'is_dup']
     anomalies = anomalies_df.drop(columns=[c for c in cols_to_drop if c in anomalies_df.columns]).to_dict(orient='records')
 
     # ── STABILIZED PREDICTION LOGIC ──
@@ -380,8 +378,9 @@ def parse_expense():
     text = request.json.get('text', '').lower()
     
     # 1. Extract Amount
-    # Matches an optional currency symbol, then digits, then optional decimal
-    amount_match = re.search(r'(?:rs|inr|\$|₹|€)?\s*(\d+(\.\d+)?)', text)
+    # Matches an optional currency symbol, then digits (including commas), then optional decimal
+    cleaned_text = text.replace(',', '')
+    amount_match = re.search(r'(?:rs|inr|\$|₹|€)?\s*(\d+(\.\d+)?)', cleaned_text)
     amount = float(amount_match.group(1)) if amount_match else 0.0
     
     # 2. Extract Category (Heuristics)
