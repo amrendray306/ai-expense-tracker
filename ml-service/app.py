@@ -47,8 +47,8 @@ def analyze():
     else:
         anomaly_df = df[['amount']]
 
-    # Increased contamination to 0.2 (detects more anomalies)
-    iso_forest = IsolationForest(contamination=0.2, random_state=42)
+    # Increased contamination to 0.3 (detects 30% anomalies)
+    iso_forest = IsolationForest(contamination=0.3, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
 
     # ── Rule-Based Anomaly Detection ──────────
