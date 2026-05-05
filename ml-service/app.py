@@ -55,20 +55,39 @@ def analyze():
     features = ['amount', 'z_score', 'cat_code']
     anomaly_df = df[features]
 
-    # ── Dynamic Anomaly Sensitivity ───────────
+    # ── Refined Sensitivity Scaling ──
+    # User requested 'average count' (not too many) and '10-60% sensitivity range'.
+    # We keep the 0.10 to 0.60 'sensitivity' value but use it to scale THRESHOLDS, 
+    # while keeping the raw IsolationForest contamination low (max 15%).
     n_expenses = len(df)
     log_scale = np.log(max(n_expenses, 1)) / np.log(200)
-    dynamic_contamination = round(max(0.10, min(0.60, 0.10 + 0.50 * log_scale)), 4)
+    sensitivity = max(0.10, min(0.60, 0.10 + 0.50 * log_scale))
     
-    iso_forest = IsolationForest(contamination=dynamic_contamination, random_state=42)
+    # IsolationForest: use a standard 5-15% contamination range
+    iforest_contamination = max(0.05, min(0.15, 0.05 + 0.10 * log_scale))
+    
+    iso_forest = IsolationForest(contamination=iforest_contamination, random_state=42)
     df['anomaly'] = iso_forest.fit_predict(anomaly_df)
 
-    # ── Hybrid Logic: Refine with Rules ───────
-    # 1. High Z-Score (> 2.5 standard deviations) is definitely an anomaly
-    df.loc[df['z_score'] > 2.5, 'anomaly'] = -1
+    # ── Hybrid Logic: Budget & Stats ────────
+    monthly_budget = request.json.get('monthlyBudget', 0)
     
-    # 2. Hard limit: 4x category average is definitely suspicious
-    df.loc[df['amount'] > (df['cat_mean'] * 4), 'anomaly'] = -1
+    # 1. Dynamic Z-Score Threshold (Scales with sensitivity)
+    # High sensitivity (0.6) -> Lower threshold (catch more)
+    # Low sensitivity (0.1) -> Higher threshold (catch only extremes)
+    z_threshold = 4.5 - (3.0 * log_scale) 
+    df.loc[df['z_score'] > z_threshold, 'anomaly'] = -1
+    
+    # 2. Hard limit: 5x category average
+    df.loc[df['amount'] > (df['cat_mean'] * 5), 'anomaly'] = -1
+
+    # 3. BUDGET GUARD (New)
+    # If an expense is less than 1% of the monthly budget, it shouldn't be an anomaly
+    # unless it is exceptionally high for its category (captured by Z-score above).
+    if monthly_budget > 0:
+        small_expense_limit = monthly_budget * 0.01
+        # Force small expenses back to normal if they aren't extreme outliers
+        df.loc[(df['amount'] < small_expense_limit) & (df['z_score'] < 3.0), 'anomaly'] = 1
 
     # Prepare output
     df['date_str'] = df['date'].dt.strftime('%Y-%m-%d')

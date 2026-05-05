@@ -37,6 +37,7 @@ export const getMonthlyReport = async (req: AuthRequest, res: Response) => {
     if (expenses.length >= 5) {
       try {
         const mlResponse = await axios.post(`${ML_URL}/api/ml/analyze`, {
+          monthlyBudget: user.monthlyBudget || 0,
           expenses: expenses.map(e => ({
             ...e,
             amount: Number(e.amount),

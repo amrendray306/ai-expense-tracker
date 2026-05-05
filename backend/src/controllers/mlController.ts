@@ -30,8 +30,12 @@ export const getInsights = async (req: Request, res: Response) => {
       });
     }
 
+    // Fetch user for budget context
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { monthlyBudget: true } });
+
     // Call Python ML service
     const mlResponse = await axios.post(`${ML_URL}/api/ml/analyze`, {
+      monthlyBudget: user?.monthlyBudget || 0,
       expenses: expenses.map(e => ({
         ...e,
         amount: Number(e.amount),
