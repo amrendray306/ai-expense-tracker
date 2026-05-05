@@ -79,56 +79,68 @@ def analyze():
     cols_to_drop = ['date_str', 'cat_mean', 'cat_std', 'z_score', 'cat_code', 'anomaly']
     anomalies = anomalies_df.drop(columns=[c for c in cols_to_drop if c in anomalies_df.columns]).to_dict(orient='records')
 
-    # ── Regression for next 60-day prediction ──
-    df['days_since_start'] = (df['date'] - df['date'].min()).dt.days
-    daily_totals = df.groupby('days_since_start')['amount'].sum().reset_index()
-    X = daily_totals[['days_since_start']]
-    y = daily_totals['amount']
+    # ── STABILIZED PREDICTION LOGIC ──
+    # To prevent 'crazy' high predictions, we filter out anomalies first
+    clean_df = df[df['anomaly'] != -1].copy()
+    if clean_df.empty:
+        clean_df = df.copy() # fallback if everything is 'anomalous'
 
-    model = LinearRegression()
-    model.fit(X, y)
+    clean_df['days_since_start'] = (clean_df['date'] - clean_df['date'].min()).dt.days
+    daily_totals = clean_df.groupby('days_since_start')['amount'].sum().reset_index()
+    
+    # Simple average for 60 days (Baseline)
+    avg_daily_historic = float(daily_totals['amount'].mean())
+    baseline_60d = avg_daily_historic * 60
 
-    last_day = daily_totals['days_since_start'].max()
-    future_days = pd.DataFrame({'days_since_start': [last_day + i for i in range(1, 61)]})
-    predictions = model.predict(future_days)
-    predicted_total = float(predictions.sum())
+    if len(daily_totals) > 2:
+        # Use regression to find the trend
+        X = daily_totals[['days_since_start']]
+        y = daily_totals['amount']
+        model = LinearRegression()
+        model.fit(X, y)
 
-    if predicted_total <= 0:
-        avg_daily = float(daily_totals['amount'].mean())
-        predicted_total = avg_daily * 60
+        last_day = daily_totals['days_since_start'].max()
+        future_days = pd.DataFrame({'days_since_start': [last_day + i for i in range(1, 61)]})
+        reg_predictions = model.predict(future_days)
+        reg_total = float(reg_predictions.sum())
+
+        # Blend: 40% Trend (Regression) + 60% History (Average)
+        # This keeps the prediction grounded even if there is a sharp upward trend
+        predicted_total = (reg_total * 0.4) + (baseline_60d * 0.6)
+    else:
+        predicted_total = baseline_60d
+
+    # Final Safety Cap: Prediction shouldn't be more than 2x the average 60-day spend 
+    # unless the trend is very consistent.
+    predicted_total = min(predicted_total, baseline_60d * 2.0)
+    if predicted_total <= 0: predicted_total = baseline_60d
 
     # ── Category-Level Predictions ──
     category_predictions = []
-    if 'category' in df.columns:
-        for cat in df['category'].unique():
-            cat_df = df[df['category'] == cat]
-            if len(cat_df) >= 3:
+    if 'category' in clean_df.columns:
+        for cat in clean_df['category'].unique():
+            cat_df = clean_df[clean_df['category'] == cat]
+            cat_avg_daily = float(cat_df['amount'].sum()) / max(len(clean_df['date'].unique()), 1)
+            cat_baseline = cat_avg_daily * 60
+            
+            if len(cat_df) >= 5:
                 cat_daily = cat_df.groupby('days_since_start')['amount'].sum().reset_index()
-                X_cat = cat_daily[['days_since_start']]
-                y_cat = cat_daily['amount']
-                
                 cat_model = LinearRegression()
-                cat_model.fit(X_cat, y_cat)
+                cat_model.fit(cat_daily[['days_since_start']], cat_daily['amount'])
+                cat_reg = float(cat_model.predict(future_days).sum())
+                # Blend 30/70 for categories to be even more conservative
+                cat_final = (cat_reg * 0.3) + (cat_baseline * 0.7)
+            else:
+                cat_final = cat_baseline
                 
-                cat_pred = cat_model.predict(future_days)
-                cat_total = float(cat_pred.sum())
-                
-                if cat_total <= 0:
-                    cat_total = float(cat_daily['amount'].mean()) * 60
-                    
-                category_predictions.append({
-                    "category": str(cat),
-                    "predictedAmount": round(cat_total, 2)
-                })
-            elif len(cat_df) > 0:
-                # Fallback for small sample size
-                cat_total = float(cat_df['amount'].mean()) * (60 / len(df['date'].unique()))
-                category_predictions.append({
-                    "category": str(cat),
-                    "predictedAmount": round(cat_total, 2)
-                })
+            # Cap category prediction
+            cat_final = max(0, min(cat_final, cat_baseline * 1.5))
+            
+            category_predictions.append({
+                "category": str(cat),
+                "predictedAmount": round(cat_final, 2)
+            })
     
-    # Sort category predictions by amount descending
     category_predictions = sorted(category_predictions, key=lambda x: x['predictedAmount'], reverse=True)
 
     # ── AI Coach (rule-based) ──────────────────
